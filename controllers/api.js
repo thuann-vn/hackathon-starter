@@ -3,17 +3,20 @@ const cheerio = require('cheerio');
 const graph = require('fbgraph');
 const { LastFmNode } = require('lastfm');
 const tumblr = require('tumblr.js');
-const GitHub = require('@octokit/rest');
+const { Octokit } = require('@octokit/rest');
 const Twit = require('twit');
 const stripe = require('stripe')(process.env.STRIPE_SKEY);
 const twilio = require('twilio')(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
-const Linkedin = require('node-linkedin')(process.env.LINKEDIN_ID, process.env.LINKEDIN_SECRET, process.env.LINKEDIN_CALLBACK_URL);
 const clockwork = require('clockwork')({ key: process.env.CLOCKWORK_KEY });
 const paypal = require('paypal-rest-sdk');
 const lob = require('lob')(process.env.LOB_KEY);
 const ig = require('instagram-node').instagram();
 const axios = require('axios');
 const { google } = require('googleapis');
+const Quickbooks = require('node-quickbooks');
+const validator = require('validator');
+
+Quickbooks.setOauthVersion('2.0');
 
 /**
  * GET /api
@@ -30,7 +33,7 @@ exports.getApi = (req, res) => {
  * Foursquare API example.
  */
 exports.getFoursquare = async (req, res, next) => {
-  const token = await req.user.tokens.find(token => token.kind === 'foursquare');
+  const token = await req.user.tokens.find((token) => token.kind === 'foursquare');
   let trendingVenues;
   let venueDetail;
   let userCheckins;
@@ -60,7 +63,7 @@ exports.getFoursquare = async (req, res, next) => {
  * Tumblr API example.
  */
 exports.getTumblr = (req, res, next) => {
-  const token = req.user.tokens.find(token => token.kind === 'tumblr');
+  const token = req.user.tokens.find((token) => token.kind === 'tumblr');
   const client = tumblr.createClient({
     consumer_key: process.env.TUMBLR_KEY,
     consumer_secret: process.env.TUMBLR_SECRET,
@@ -82,7 +85,7 @@ exports.getTumblr = (req, res, next) => {
  * Facebook API example.
  */
 exports.getFacebook = (req, res, next) => {
-  const token = req.user.tokens.find(token => token.kind === 'facebook');
+  const token = req.user.tokens.find((token) => token.kind === 'facebook');
   graph.setAccessToken(token.accessToken);
   graph.get(`${req.user.facebook}?fields=id,name,email,first_name,last_name,gender,link,locale,timezone`, (err, profile) => {
     if (err) { return next(err); }
@@ -110,7 +113,7 @@ exports.getScraping = (req, res, next) => {
         links
       });
     })
-    .catch(error => next(error));
+    .catch((error) => next(error));
 };
 
 /**
@@ -118,7 +121,7 @@ exports.getScraping = (req, res, next) => {
  * GitHub API Example.
  */
 exports.getGithub = async (req, res, next) => {
-  const github = new GitHub();
+  const github = new Octokit();
   try {
     const { data: repo } = await github.repos.get({ owner: 'sahat', repo: 'hackathon-starter' });
     res.render('api/github', {
@@ -130,13 +133,17 @@ exports.getGithub = async (req, res, next) => {
   }
 };
 
-/**
- * GET /api/aviary
- * Aviary image processing example.
- */
-exports.getAviary = (req, res) => {
-  res.render('api/aviary', {
-    title: 'Aviary API'
+exports.getQuickbooks = (req, res) => {
+  const token = req.user.tokens.find((token) => token.kind === 'quickbooks');
+
+  const qbo = new Quickbooks(process.env.QUICKBOOKS_CLIENT_ID, process.env.QUICKBOOKS_CLIENT_SECRET,
+    token.accessToken, false, req.user.quickbooks, true, false, null, '2.0', token.refreshToken);
+
+  qbo.findCustomers((_, customers) => {
+    res.render('api/quickbooks', {
+      title: 'Quickbooks API',
+      customers: customers.QueryResponse.Customer
+    });
   });
 };
 
@@ -248,7 +255,7 @@ exports.getLastfm = async (req, res, next) => {
  * Twitter API example.
  */
 exports.getTwitter = async (req, res, next) => {
-  const token = req.user.tokens.find(token => token.kind === 'twitter');
+  const token = req.user.tokens.find((token) => token.kind === 'twitter');
   const T = new Twit({
     consumer_key: process.env.TWITTER_KEY,
     consumer_secret: process.env.TWITTER_SECRET,
@@ -275,16 +282,15 @@ exports.getTwitter = async (req, res, next) => {
  * Post a tweet.
  */
 exports.postTwitter = (req, res, next) => {
-  req.assert('tweet', 'Tweet cannot be empty').notEmpty();
+  const validationErrors = [];
+  if (validator.isEmpty(req.body.tweet)) validationErrors.push({ msg: 'Tweet cannot be empty' });
 
-  const errors = req.validationErrors();
-
-  if (errors) {
-    req.flash('errors', errors);
+  if (validationErrors.length) {
+    req.flash('errors', validationErrors);
     return res.redirect('/api/twitter');
   }
 
-  const token = req.user.tokens.find(token => token.kind === 'twitter');
+  const token = req.user.tokens.find((token) => token.kind === 'twitter');
   const T = new Twit({
     consumer_key: process.env.TWITTER_KEY,
     consumer_secret: process.env.TWITTER_SECRET,
@@ -424,13 +430,12 @@ exports.getTwilio = (req, res) => {
  * Send a text message using Twilio.
  */
 exports.postTwilio = (req, res, next) => {
-  req.assert('number', 'Phone number is required.').notEmpty();
-  req.assert('message', 'Message cannot be blank.').notEmpty();
+  const validationErrors = [];
+  if (validator.isEmpty(req.body.number)) validationErrors.push({ msg: 'Phone number is required.' });
+  if (validator.isEmpty(req.body.message)) validationErrors.push({ msg: 'Message cannot be blank.' });
 
-  const errors = req.validationErrors();
-
-  if (errors) {
-    req.flash('errors', errors);
+  if (validationErrors.length) {
+    req.flash('errors', validationErrors);
     return res.redirect('/api/twilio');
   }
 
@@ -443,6 +448,37 @@ exports.postTwilio = (req, res, next) => {
     req.flash('success', { msg: `Text send to ${sentMessage.to}` });
     res.redirect('/api/twilio');
   }).catch(next);
+};
+
+/**
+ * Get /api/twitch
+ */
+exports.getTwitch = async (req, res, next) => {
+  const token = req.user.tokens.find((token) => token.kind === 'twitch');
+  const twitchID = req.user.twitch;
+
+  const getUser = (userID) =>
+    axios.get(`https://api.twitch.tv/helix/users?id=${userID}`, { headers: { Authorization: `Bearer ${token.accessToken}` } })
+      .then(({ data }) => data)
+      .catch((err) => Promise.reject(new Error(`There was an error while getting user data ${err}`)));
+  const getFollowers = () =>
+    axios.get(`https://api.twitch.tv/helix/users/follows?to_id=${twitchID}`, { headers: { Authorization: `Bearer ${token.accessToken}` } })
+      .then(({ data }) => data)
+      .catch((err) => Promise.reject(new Error(`There was an error while getting followers ${err}`)));
+
+  try {
+    const yourTwitchUser = await getUser(twitchID);
+    const otherTwitchUser = await getUser(44322889);
+    const twitchFollowers = await getFollowers();
+    res.render('api/twitch', {
+      title: 'Twitch API',
+      yourTwitchUserData: yourTwitchUser.data[0],
+      otherTwitchUserData: otherTwitchUser.data[0],
+      twitchFollowers,
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 /**
@@ -469,22 +505,6 @@ exports.postClockwork = (req, res, next) => {
     if (err) { return next(err.errDesc); }
     req.flash('success', { msg: `Text sent to ${responseData.responses[0].to}` });
     res.redirect('/api/clockwork');
-  });
-};
-
-/**
- * GET /api/linkedin
- * LinkedIn API example.
- */
-exports.getLinkedin = (req, res, next) => {
-  const token = req.user.tokens.find(token => token.kind === 'linkedin');
-  const linkedin = Linkedin.init(token.accessToken);
-  linkedin.people.me((err, $in) => {
-    if (err) { return next(err); }
-    res.render('api/linkedin', {
-      title: 'LinkedIn API',
-      profile: $in
-    });
   });
 };
 
@@ -524,7 +544,7 @@ exports.getChart = async (req, res, next) => {
  * Instagram API example.
  */
 exports.getInstagram = async (req, res, next) => {
-  const token = req.user.tokens.find(token => token.kind === 'instagram');
+  const token = req.user.tokens.find((token) => token.kind === 'instagram');
   ig.use({ client_id: process.env.INSTAGRAM_ID, client_secret: process.env.INSTAGRAM_SECRET });
   ig.use({ access_token: token.accessToken });
   try {
@@ -634,8 +654,8 @@ exports.getLob = async (req, res, next) => {
   };
 
   const lookupZip = () => lob.usZipLookups.lookup({ zip_code: '94107' })
-    .then(zipdetails => (zipdetails))
-    .catch(error => Promise.reject(new Error(`Could not get zip code details: ${error}`)));
+    .then((zipdetails) => (zipdetails))
+    .catch((error) => Promise.reject(new Error(`Could not get zip code details: ${error}`)));
 
   const createAndMailLetter = () => lob.letters.create({
     description: 'My First Class Letter',
@@ -648,8 +668,8 @@ exports.getLob = async (req, res, next) => {
           </div></div></div></body></html>`,
     color: false
   })
-    .then(letter => (letter))
-    .catch(error => Promise.reject(new Error(`Could not create and send letter: ${error}`)));
+    .then((letter) => (letter))
+    .catch((error) => Promise.reject(new Error(`Could not create and send letter: ${error}`)));
 
   try {
     const uspsLetter = await createAndMailLetter();
@@ -685,7 +705,7 @@ exports.postFileUpload = (req, res) => {
  * Pinterest API example.
  */
 exports.getPinterest = (req, res, next) => {
-  const token = req.user.tokens.find(token => token.kind === 'pinterest');
+  const token = req.user.tokens.find((token) => token.kind === 'pinterest');
   axios.get(`https://api.pinterest.com/v1/me/boards?access_token=${token.accessToken}`)
     .then((response) => {
       res.render('api/pinterest', {
@@ -702,18 +722,17 @@ exports.getPinterest = (req, res, next) => {
  * Create a pin.
  */
 exports.postPinterest = (req, res, next) => {
-  req.assert('board', 'Board is required.').notEmpty();
-  req.assert('note', 'Note cannot be blank.').notEmpty();
-  req.assert('image_url', 'Image URL cannot be blank.').notEmpty();
+  const validationErrors = [];
+  if (validator.isEmpty(req.body.board)) validationErrors.push({ msg: 'Board is required.' });
+  if (validator.isEmpty(req.body.note)) validationErrors.push({ msg: 'Note cannot be blank.' });
+  if (validator.isEmpty(req.body.image_url)) validationErrors.push({ msg: 'Image URL cannot be blank.' });
 
-  const errors = req.validationErrors();
-
-  if (errors) {
-    req.flash('errors', errors);
+  if (validationErrors.length) {
+    req.flash('errors', validationErrors);
     return res.redirect('/api/pinterest');
   }
 
-  const token = req.user.tokens.find(token => token.kind === 'pinterest');
+  const token = req.user.tokens.find((token) => token.kind === 'pinterest');
   const formData = {
     board: req.body.board,
     note: req.body.note,
@@ -732,6 +751,25 @@ exports.postPinterest = (req, res, next) => {
     });
 };
 
+exports.getHereMaps = (req, res) => {
+  const imageMapURL = `https://image.maps.api.here.com/mia/1.6/mapview?\
+app_id=${process.env.HERE_APP_ID}&app_code=${process.env.HERE_APP_CODE}&\
+poix0=47.6516216,-122.3498897;white;black;15;Fremont Troll&\
+poix1=47.6123335,-122.3314332;white;black;15;Seattle Art Museum&\
+poix2=47.6162956,-122.3555097;white;black;15;Olympic Sculpture Park&\
+poix3=47.6205099,-122.3514661;white;black;15;Space Needle&\
+c=47.6176371,-122.3344637&\
+u=1500&\
+vt=1&&z=13&\
+h=500&w=800&`;
+
+  res.render('api/here-maps', {
+    app_id: process.env.HERE_APP_ID,
+    app_code: process.env.HERE_APP_CODE,
+    title: 'Here Maps API',
+    imageMapURL
+  });
+};
 
 exports.getGoogleMaps = (req, res) => {
   res.render('api/google-maps', {
@@ -741,7 +779,7 @@ exports.getGoogleMaps = (req, res) => {
 };
 
 exports.getGoogleDrive = (req, res) => {
-  const token = req.user.tokens.find(token => token.kind === 'google');
+  const token = req.user.tokens.find((token) => token.kind === 'google');
   const authObj = new google.auth.OAuth2({
     access_type: 'offline'
   });
@@ -761,6 +799,36 @@ exports.getGoogleDrive = (req, res) => {
     res.render('api/google-drive', {
       title: 'Google Drive API',
       files: response.data.files,
+    });
+  });
+};
+
+exports.getGoogleSheets = (req, res) => {
+  const token = req.user.tokens.find((token) => token.kind === 'google');
+  const authObj = new google.auth.OAuth2({
+    access_type: 'offline'
+  });
+  authObj.setCredentials({
+    access_token: token.accessToken
+  });
+
+  const sheets = google.sheets({
+    version: 'v4',
+    auth: authObj
+  });
+
+  const url = 'https://docs.google.com/spreadsheets/d/12gm6fRAp0bC8TB2vh7sSPT3V75Ug99JaA9L0PqiWS2s/edit#gid=0';
+  const re = /spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+  const id = url.match(re)[1];
+
+  sheets.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: 'Class Data!A1:F',
+  }, (err, response) => {
+    if (err) return console.log(`The API returned an error: ${err}`);
+    res.render('api/google-sheets', {
+      title: 'Google Sheets API',
+      values: response.data.values,
     });
   });
 };

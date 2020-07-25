@@ -1,6 +1,42 @@
 # Changelog
 ---------
 
+### 6.0.0 (January 2, 2020)
+- Dropped support for NodeJS 8.x, due to its EOL
+- Use HTML5 native client form validation (thanks to @peterblazejewicz)
+- Fix navbar rendering issues when using themes (thanks to @peterblazejewicz)
+- Fix button formatting issues when applying themes (thanks to @peterblazejewicz)
+- Fixed drop down menu to show correct formatting from the theme (thanks to @jonasroslund)
+- Config mongoose to use the new Server Discovery and Monitoring
+- Fix validation bug in Twitter, Pinterest, and Twilio API examples
+- Fix HERE icon in the API examples
+- Fix minor issues in Stripe and Lob API examples
+- Update dependencies
+- Update documentation (thanks in part to @noftaly, @yanivm)
+
+### 5.2.0 (July 28, 2019)
+- Added API example: Google Drive (thanks to @tanaydin)
+- Added Google Sheets API example (thanks to @clarkngo)
+- Added HERE Maps API example
+- Added support for Intuit Quickbooks API
+- Improved Lob.com API example
+- Added support for email verification
+- Added support for refreshing OAuth tokens
+- Fixed bug when users attempt to login by email for accounts that are created with a sign in provider
+- Fixed bug in the password reset
+- Added CSRF check to the File Upload API example -- security improvement -- breaking change
+- Added validation check to password reset token -- security improvement
+- Fixed missing await in the Foursquare API example
+- Fixed Google Oauth2 profile picture (thanks to @tanaydin)
+- Removed deprecated Instagram API calls -- breaking change
+- Upgrade to login by LinkedIn v2, remove LinkedIn API example -- breaking change
+- Removed express-validator in favor of validator.js -- breaking change
+- Removed Aviary API example since the service has been shutdown
+- Added additional unit tests for the user model (thanks to @Tolsee)
+- Updated Steam's logo
+- Updated dependencies
+- Updated documentation (thanks in part to @TheMissingNTLDR, @Coteh)
+
 ### 5.1.4 (May 14, 2019)
 - Migrate from requestjs to axios (thanks to @FX-Wood)
 - Enable page templates to add items to the HTML head element

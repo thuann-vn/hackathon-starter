@@ -7,6 +7,8 @@ const userSchema = new mongoose.Schema({
   password: String,
   passwordResetToken: String,
   passwordResetExpires: Date,
+  emailVerificationToken: String,
+  emailVerified: Boolean,
 
   snapchat: String,
   facebook: String,
@@ -16,6 +18,8 @@ const userSchema = new mongoose.Schema({
   instagram: String,
   linkedin: String,
   steam: String,
+  twitch: String,
+  quickbooks: String,
   tokens: Array,
 
   profile: {
